@@ -22,6 +22,7 @@ class Order(BaseModel):
     __tablename__ = 'order'
     order_number: Mapped[str] = mapped_column(db.String(20), unique=True, nullable=False, index=True)
     client_id: Mapped[str] = mapped_column(db.String(36), db.ForeignKey('users.id'), nullable=False)
+    writer_id: Mapped[Optional[str]] = mapped_column(db.String(36), db.ForeignKey('users.id'), nullable=True)
     service_id: Mapped[str] = mapped_column(db.String(36), db.ForeignKey('service.id'), nullable=False)
     academic_level_id: Mapped[str] = mapped_column(db.String(36), db.ForeignKey('academic_level.id'), nullable=False)
     deadline_id: Mapped[str] = mapped_column(db.String(36), db.ForeignKey('deadline.id'), nullable=False)
@@ -46,6 +47,7 @@ class Order(BaseModel):
     
     # Relationships
     client: Mapped["User"] = relationship('User', foreign_keys=[client_id], back_populates='orders')
+    writer: Mapped[Optional["User"]] = relationship('User', foreign_keys=[writer_id], backref='assigned_orders', lazy=True)
     service: Mapped["Service"] = relationship('Service', foreign_keys=[service_id], back_populates='orders')
     academic_level: Mapped["AcademicLevel"] = relationship('AcademicLevel', foreign_keys=[academic_level_id], back_populates='orders')
     deadline: Mapped["Deadline"] = relationship('Deadline', foreign_keys=[deadline_id], back_populates='orders')

@@ -33,7 +33,9 @@ flask_config = config[config_name]
 celery_app = Celery(
     'tuned',
     broker=flask_config.CELERY_BROKER_URL,
-    backend=flask_config.CELERY_RESULT_BACKEND,
+    # In development (no Redis), use in-memory backend to avoid connection hangs.
+    # In production, CELERY_RESULT_BACKEND env var should be set to Redis URL.
+    backend=os.environ.get('CELERY_RESULT_BACKEND', 'cache+memory://'),
     task_cls=ContextTask,
     include=[
         'tuned.tasks.email',
@@ -58,8 +60,11 @@ celery_app.conf.update(
         'tuned.tasks.dashboard_tasks.*': {'queue': 'notifications'},
     },
     broker_transport_options={
-        'visibility_timeout': 3600,  # 1 hour
+        'visibility_timeout': 3600,
+        'max_retries': 0,          # Don't retry broker connection
     },
+    broker_connection_retry_on_startup=False,
+    broker_connection_max_retries=0,
 )
 
 def init_celery(app: Flask) -> None:

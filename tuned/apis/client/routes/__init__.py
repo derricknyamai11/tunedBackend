@@ -19,6 +19,9 @@ from tuned.apis.client.routes.referrals import (
     ReferralShareView,
     ReferralRedeemView
 )
+from tuned.apis.client.routes.wallet import WalletView, WalletTopup, WalletConfirm, WalletDeduct
+from tuned.apis.client.routes.chat import ClientChatList, ClientChatMessages
+from tuned.apis.client.routes.testimonial import ClientTestimonialSubmit
 
 
 from typing import Any
@@ -104,4 +107,14 @@ CLIENT_ROUTES: list[dict[str, Any]] = [
         "view_func": ReferralRedeemView.as_view("referral_redeem_view"),
         "methods": ["POST"],
     },
+    # Wallet
+    {'rule': '/wallet', 'view_func': WalletView.as_view('wallet_view'), 'methods': ['GET']},
+    {'rule': '/wallet/topup', 'view_func': WalletTopup.as_view('wallet_topup'), 'methods': ['POST']},
+    {'rule': '/wallet/confirm', 'view_func': WalletConfirm.as_view('wallet_confirm'), 'methods': ['POST']},
+    {'rule': '/wallet/deduct', 'view_func': WalletDeduct.as_view('wallet_deduct'), 'methods': ['POST']},
+    # Chat
+    {'rule': '/chat', 'view_func': ClientChatList.as_view('client_chat_list'), 'methods': ['GET', 'POST']},
+    {'rule': '/chat/<string:chat_id>/messages', 'view_func': ClientChatMessages.as_view('client_chat_messages'), 'methods': ['GET', 'POST']},
+    # Testimonial submission
+    {'rule': '/testimonials', 'view_func': ClientTestimonialSubmit.as_view('client_testimonial_submit'), 'methods': ['POST']},
 ]

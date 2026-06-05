@@ -1,6 +1,7 @@
 from dataclasses import asdict
 from flask import request
-from flask_login import current_user, login_required
+from tuned.utils.auth.decorators import combined_auth_check
+from flask import g
 from flask.views import MethodView
 from tuned.utils.dependencies import get_services
 from tuned.utils.responses import error_response, success_response, validation_error_response
@@ -31,18 +32,18 @@ def _normalize_validation_errors(errors: Any) -> dict[str, list[str]]:
     return normalized
 
 class SettingsView(MethodView):
-    decorators = [login_required]
+    decorators = [combined_auth_check(require_admin=False)]
 
     def get(self) -> tuple[Any, int]:
         try:
-            settings_data = get_services().preferences.get_user_preferences(current_user.id)
+            settings_data = get_services().preferences.get_user_preferences(g.current_user.id)
             return success_response(settings_data.to_dict())
         except Exception as e:
             logger.error(f"Get settings error: {str(e)}")
             return error_response("Failed to fetch settings", status=500)
 
 class SettingsCategoryView(MethodView):
-    decorators = [login_required]
+    decorators = [combined_auth_check(require_admin=False)]
 
     def patch(self, category: str) -> tuple[Any, int]:
         schema_map = {
@@ -66,7 +67,7 @@ class SettingsCategoryView(MethodView):
         try:
             locale = BaseRequestDTO(ip_address=get_user_ip(), user_agent=get_user_agent())
             dto = build_preference_update_dto(category, data)
-            updated_preferences = get_services().preferences.update_category(category, current_user.id, dto, locale)
+            updated_preferences = get_services().preferences.update_category(category, g.current_user.id, dto, locale)
             return success_response({"preferences": asdict(updated_preferences)})
         except ValueError as e:
             logger.error(f"Invalid settings update for {category}: {str(e)}")

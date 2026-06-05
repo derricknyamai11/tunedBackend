@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from tuned.models import (
     RefundStatus, PaymentStatus, MethodCategory, TransactionType,
     TransactionStatus, DiscountType, Currency

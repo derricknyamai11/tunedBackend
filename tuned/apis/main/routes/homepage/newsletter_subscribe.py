@@ -19,7 +19,7 @@ logger: logging.Logger = get_logger(__name__)
 
 
 class NewsletterSubscribeView(MethodView):
-    decorators = [rate_limit(max_requests=3, window=3600)]
+    decorators = [rate_limit(max_requests=3, window=3600, fail_open=True)]
 
     def post(self) -> tuple[Any, int]:
         try:

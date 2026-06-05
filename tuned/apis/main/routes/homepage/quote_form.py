@@ -10,7 +10,7 @@ from datetime import datetime
 from tuned.utils.dependencies import get_services
 from tuned.apis.main.schemas import CalculatePriceSchema
 from tuned.utils.responses import success_response, error_response, validation_error_response
-from tuned.redis_client import redis_client
+from tuned.utils.cache import cache_get, cache_set, cache_delete, cache_exists
 from tuned.dtos import CalculatePriceRequestDTO, ServiceWithPricingCategory
 from tuned.utils.enums import PricingCategoryEnum
 from tuned.core.logging import get_logger
@@ -48,20 +48,22 @@ class GetQuoteFormOptions(MethodView):
 
     def get(self) -> tuple[Any, int]:
         try:
-            raw = redis_client.get(CACHE_KEY)
+            raw = cache_get(CACHE_KEY)
             if raw is not None and isinstance(raw, (str, bytes, bytearray)):
                 logger.debug('Returning quote form options from cache')
                 return success_response(json.loads(raw))
             
-            services = self._build_services_response()     
+            services = self._build_services_response()
             academic_levels = get_services().academic_level.list_academic_levels()
-            
+            deadlines = get_services().deadline.list_deadlines()
+
             data = {
                 'services': [asdict(s) for s in services],
                 'levels': [asdict(a) for a in academic_levels],
+                'deadlines': [asdict(d) for d in deadlines],
             }
             
-            redis_client.setex(
+            cache_set(
                 CACHE_KEY,
                 CACHE_TTL,
                 json.dumps(data)

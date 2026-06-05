@@ -62,7 +62,7 @@ def send_verification_email(user: User, raw_token: str) -> None:
     expires_hours = current_app.config.get('EMAIL_VERIFICATION_TOKEN_EXPIRES_HOURS', 24)
 
     try:
-        send_transactional_email.apply_async(
+        send_transactional_email.apply_async(retry=False, 
             kwargs={
                 'to': user.email,
                 'subject': 'Verify Your Email — TunedEssays',

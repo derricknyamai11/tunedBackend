@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import timezone, datetime
 from dataclasses import dataclass, field
 from typing import Optional, TYPE_CHECKING, Union
@@ -35,7 +37,8 @@ class UserResponseDTO:
     name: str
     email: str
     avatar_url: str
-    # role: str
+    is_admin: bool = False
+    is_writer: bool = False
     session_created_at: Optional[str] = None
 
     @classmethod
@@ -45,7 +48,8 @@ class UserResponseDTO:
             name=" ".join(filter(None, [obj.first_name, obj.last_name])),
             email=obj.email,
             avatar_url=obj.get_profile_pic_url(),
-            # role=obj.role,
+            is_admin=obj.is_admin,
+            is_writer=getattr(obj, 'is_writer', False),
             session_created_at=datetime.now(timezone.utc).isoformat(),
         )
 UserUpdateValue = Union[str, int, bool, datetime]
@@ -100,16 +104,15 @@ class ProfileResponseDTO:
     is_admin: bool
     reward_points: int
     last_login_at: Optional[str]
-    failed_login_attempts: int
-    last_failed_login: Optional[str]
     created_at: Optional[str]
+    # Security note: failed_login_attempts and last_failed_login intentionally
+    # excluded from profile response to avoid leaking account-lockout state.
 
     @classmethod
     def from_model(cls, obj: "User") -> "ProfileResponseDTO":
         last_login = obj.last_login_at.isoformat() if obj.last_login_at else None
-        last_failed = obj.last_failed_login.isoformat() if obj.last_failed_login else None
         created = obj.created_at.isoformat() if obj.created_at else None
-        
+
         return cls(
             id=str(obj.id),
             username=obj.username,
@@ -123,8 +126,6 @@ class ProfileResponseDTO:
             is_admin=obj.is_admin,
             reward_points=obj.reward_points,
             last_login_at=last_login,
-            failed_login_attempts=obj.failed_login_attempts,
-            last_failed_login=last_failed,
             created_at=created,
         )
 

@@ -12,6 +12,7 @@ from tuned.models.tag import Tag, service_tags, sample_tags, blog_post_tags
 from tuned.models.audit import PriceHistory, OrderStatusHistory, ActivityLog, EmailLog
 from tuned.models.deadline_extension import OrderDeadlineExtensionRequest
 from tuned.models.revision_request import OrderRevisionRequest
+from tuned.models.resource import Resource
 
 from tuned.models.preferences import (
     UserNotificationPreferences, UserEmailPreferences, UserPrivacySettings,
@@ -39,6 +40,7 @@ __all__ = [
     "PriceHistory", "OrderStatusHistory", "ActivityLog", "EmailLog",
     "OrderDeadlineExtensionRequest",
     "OrderRevisionRequest",
+    "Resource",
     "UserNotificationPreferences", "UserEmailPreferences", "UserPrivacySettings",
     "UserLocalizationSettings", "UserAccessibilityPreferences", "UserBillingPreferences",
     "OrderStatus", "SupportTicketStatus", "PaymentStatus", "PaymentMethod", "MethodCategory",

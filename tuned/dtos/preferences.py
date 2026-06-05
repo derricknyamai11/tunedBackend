@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dataclasses import dataclass, asdict
 from enum import Enum
 from typing import Mapping, Optional, Dict, TYPE_CHECKING, TypeAlias, TypeVar, cast

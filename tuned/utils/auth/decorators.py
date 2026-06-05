@@ -13,7 +13,7 @@ def jwt_required_fresh(f: Callable[..., Any]) -> Callable[..., Any]:
         verify_jwt_in_request(fresh=True)
         
         user_id = get_jwt_identity()
-        user = User.query.get(int(user_id))
+        user = User.query.get(str(user_id))
         
         if not user:
             return unauthorized_response('User not found')
@@ -28,20 +28,21 @@ def jwt_required_fresh(f: Callable[..., Any]) -> Callable[..., Any]:
 def admin_required(f: Callable[..., Any]) -> Callable[..., Any]:
     @wraps(f)
     def wrapped(*args: Any, **kwargs: Any) -> Any:
-        # Get current user from JWT
+        verify_jwt_in_request()
+
         user_id = get_jwt_identity()
-        user = User.query.get(int(user_id))
-        
+        user = User.query.get(str(user_id))
+
         if not user:
             return unauthorized_response('User not found')
-        
+
         if not user.is_admin:
             return forbidden_response('Admin privileges required')
-        
+
         g.current_user = user
-        
+
         return f(*args, **kwargs)
-    
+
     return wrapped
 
 
@@ -50,7 +51,7 @@ def verified_email_required(f: Callable[..., Any]) -> Callable[..., Any]:
     def wrapped(*args: Any, **kwargs: Any) -> Any:
         # Get current user from JWT
         user_id = get_jwt_identity()
-        user = User.query.get(int(user_id))
+        user = User.query.get(str(user_id))
         
         if not user:
             return unauthorized_response('User not found')
@@ -73,7 +74,7 @@ def active_user_required(f: Callable[..., Any]) -> Callable[..., Any]:
     def wrapped(*args: Any, **kwargs: Any) -> Any:
         # Get current user from JWT
         user_id = get_jwt_identity()
-        user = User.query.get(int(user_id))
+        user = User.query.get(str(user_id))
         
         if not user:
             return unauthorized_response('User not found')
@@ -96,7 +97,7 @@ def combined_auth_check(require_verified: bool = True, require_admin: bool = Fal
             verify_jwt_in_request()
             
             user_id = get_jwt_identity()
-            user = User.query.get(int(user_id))
+            user = User.query.get(str(user_id))
             
             if not user:
                 return unauthorized_response('User not found')

@@ -13,7 +13,7 @@ class BaseConfig:
     LOG_LEVEL: str = "DEBUG"
     LOG_FORMAT: Literal["text", "json"] = "json"
     
-    REQUIRE_EMAIL_VERIFICATION: bool = True
+    REQUIRE_EMAIL_VERIFICATION: bool = os.environ.get('REQUIRE_EMAIL_VERIFICATION', 'True').lower() not in ('false', '0', 'no')
 
     SQLALCHEMY_TRACK_MODIFICATIONS: bool = False
     SQLALCHEMY_RECORD_QUERIES: bool = True
@@ -30,7 +30,7 @@ class BaseConfig:
     REMEMBER_COOKIE_HTTPONLY: bool = True
     REMEMBER_COOKIE_DURATION: timedelta = timedelta(days=30)
     
-    JWT_SECRET_KEY: str = os.environ.get('JWT_SECRET_KEY') or os.environ.get('SECRET_KEY') or "dev_jwt_secret"
+    JWT_SECRET_KEY: str = os.environ.get('JWT_SECRET_KEY') or os.environ.get('SECRET_KEY') or os.urandom(32).hex()
     JWT_ACCESS_TOKEN_EXPIRES: timedelta = timedelta(hours=1)
     JWT_REFRESH_TOKEN_EXPIRES: timedelta = timedelta(days=30)
     JWT_TOKEN_LOCATION: list[str] = ['headers', 'cookies']

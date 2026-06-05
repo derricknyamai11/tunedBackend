@@ -12,14 +12,14 @@ Tests all Marshmallow schemas used in the main blueprint including:
 """
 import pytest
 from marshmallow import ValidationError
-from tuned.main.schemas import (
+from tuned.apis.main.schemas import (
     NewsletterSubscribeSchema,
     SearchQuerySchema,
     ServiceFilterSchema,
     SampleFilterSchema,
     BlogFilterSchema,
     BlogCommentSchema,
-    CommentReactionSchema
+    CommentReactionSchema,
 )
 
 
@@ -200,14 +200,14 @@ class TestSampleFilterSchema:
         """Test that valid filters pass validation"""
         schema = SampleFilterSchema()
         data = {
-            'service_id': 1,
+            'service_id': 'abc123',
             'featured': True,
             'q': 'test',
             'sort': 'created_at',
             'order': 'desc'
         }
         result = schema.load(data)
-        assert result['service_id'] == 1
+        assert result['service_id'] == 'abc123'
         assert result['featured'] is True
     
     def test_default_values(self):
@@ -234,14 +234,14 @@ class TestBlogFilterSchema:
         """Test that valid filters pass validation"""
         schema = BlogFilterSchema()
         data = {
-            'category_id': 1,
+            'category_id': 'abc123',
             'is_published': True,
             'q': 'test',
             'sort': 'published_at',
             'order': 'desc'
         }
         result = schema.load(data)
-        assert result['category_id'] == 1
+        assert result['category_id'] == 'abc123'
         assert result['is_published'] is True
     
     def test_default_values(self):
@@ -328,14 +328,14 @@ class TestCommentReactionSchema:
     def test_valid_like_reaction(self):
         """Test that valid 'like' reaction passes validation"""
         schema = CommentReactionSchema()
-        data = {'reaction_type': 'like'}
+        data = {'reaction_type': 'like', 'category_id': 'cat123', 'exclude': 'some-slug'}
         result = schema.load(data)
         assert result['reaction_type'] == 'like'
-    
+
     def test_valid_dislike_reaction(self):
         """Test that valid 'dislike' reaction passes validation"""
         schema = CommentReactionSchema()
-        data = {'reaction_type': 'dislike'}
+        data = {'reaction_type': 'dislike', 'category_id': 'cat123', 'exclude': 'some-slug'}
         result = schema.load(data)
         assert result['reaction_type'] == 'dislike'
     

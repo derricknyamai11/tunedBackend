@@ -3,7 +3,7 @@ from flask import request
 from flask.views import MethodView
 from tuned.utils.dependencies import get_services
 from tuned.utils.responses import paginated_response, error_response, validation_error_response, success_response
-from tuned.redis_client import redis_client
+from tuned.utils.cache import cache_get, cache_set, cache_delete, cache_exists
 from tuned.apis.main.schemas import BlogFilterSchema
 from tuned.dtos import BlogPostListRequestDTO #, PostByCategoryRequestDTO
 from tuned.core.logging import get_logger
@@ -35,7 +35,7 @@ class ListBlogPosts(MethodView):
 
         try:
             cache_key = f'{CACHE_KEY}:{json.dumps(params)}'
-            raw = redis_client.get(cache_key)
+            raw = cache_get(cache_key)
             if raw is not None and isinstance(raw, (str, bytes, bytearray)):
                 logger.debug(f'Returning blogs from cache')
                 data = json.loads(raw)
@@ -50,7 +50,7 @@ class ListBlogPosts(MethodView):
             blogs_dto = get_services().blogs.post.list_published(blog_req)
             data = asdict(blogs_dto)
 
-            redis_client.setex(
+            cache_set(
                 cache_key,
                 CACHE_TTL,
                 json.dumps(data)
@@ -70,7 +70,7 @@ class GetBlogPost(MethodView):
 
     def get(self, slug: str) -> tuple[Any, int]:
         try:
-            raw = redis_client.get(f'blog:{slug}')
+            raw = cache_get(f'blog:{slug}')
             if raw is not None and isinstance(raw, (str, bytes, bytearray)):
                 logger.debug('Returning blog from cache')
                 return success_response(json.loads(raw))
@@ -78,7 +78,7 @@ class GetBlogPost(MethodView):
             blog_dto = get_services().blogs.post.get_by_slug(slug)
             data = asdict(blog_dto)
 
-            redis_client.setex(
+            cache_set(
                 f'blog:{slug}',
                 CACHE_TTL,
                 json.dumps(data)
@@ -93,7 +93,7 @@ class GetRelatedBlogPosts(MethodView):
 
     def get(self, slug: str) -> tuple[Any, int]:
         try:
-            raw = redis_client.get(f'blog:{slug}:related')
+            raw = cache_get(f'blog:{slug}:related')
             if raw is not None and isinstance(raw, (str, bytes, bytearray)):
                 logger.debug('Returning blogs from cache')
                 return success_response(json.loads(raw))
@@ -101,7 +101,7 @@ class GetRelatedBlogPosts(MethodView):
             related_blogs = get_services().blogs.post.get_related(slug)
             data = [asdict(b) for b in related_blogs]
 
-            redis_client.setex(
+            cache_set(
                 f'blog:{slug}:related',
                 CACHE_TTL,
                 json.dumps(data)

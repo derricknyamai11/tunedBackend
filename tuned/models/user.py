@@ -48,6 +48,9 @@ class User(UserMixin, BaseModel):  # type: ignore[misc]
     profile_pic: Mapped[Optional[str]] = mapped_column(db.String(120), nullable=True, default='default.png')
 
     is_admin: Mapped[bool] = mapped_column(db.Boolean, default=False, server_default='false', nullable=False)
+    is_writer: Mapped[bool] = mapped_column(db.Boolean, default=False, server_default='false', nullable=False)
+    wallet_balance: Mapped[float] = mapped_column(db.Float, default=0.0, server_default='0.0', nullable=False)
+    is_active: Mapped[bool] = mapped_column(db.Boolean, default=True, server_default='true', nullable=False)
 
     referral_code: Mapped[Optional[str]] = mapped_column(db.String(10), unique=True, nullable=True) 
     reward_points: Mapped[int] = mapped_column(db.Integer, default=0, nullable=False)

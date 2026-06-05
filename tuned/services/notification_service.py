@@ -62,15 +62,21 @@ def create_notification(
         return None
     
     from tuned.tasks.notifications import create_in_app_notification
-    create_in_app_notification.delay(
-        user_id=str(user_id),
-        title=title,
-        message=message,
-        notification_type=type,
-        action_url=link,
-        category=category
-    )
-    logger.info(f"Notification creation dispatched for user {user_id}: {title}")
+    try:
+        create_in_app_notification.apply_async(
+            retry=False,
+            kwargs=dict(
+                user_id=str(user_id),
+                title=title,
+                message=message,
+                notification_type=type,
+                action_url=link,
+                category=category,
+            ),
+        )
+        logger.info(f"Notification dispatched for user {user_id}: {title}")
+    except Exception:
+        pass  # Broker unavailable — skip notification
     return None
 
 def create_welcome_notification(user: User) -> None:

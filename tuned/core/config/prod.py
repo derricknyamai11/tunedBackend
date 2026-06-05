@@ -5,7 +5,21 @@ from tuned.core.config.base import BaseConfig
 
 load_dotenv()
 
+
+def _require_env(key: str, min_length: int = 32) -> str:
+    value = os.environ.get(key, "")
+    if not value or len(value) < min_length:
+        raise RuntimeError(
+            f"Production requires a strong {key} environment variable "
+            f"(min {min_length} characters). "
+            "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\""
+        )
+    return value
+
+
 class ProductionConfig(BaseConfig):
+    SECRET_KEY: str = _require_env("SECRET_KEY")
+    JWT_SECRET_KEY: str = _require_env("JWT_SECRET_KEY")
     DEBUG: bool = False
     TESTING: bool = False
     

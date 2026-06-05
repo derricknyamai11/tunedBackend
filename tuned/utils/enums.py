@@ -1,6 +1,6 @@
 from enum import Enum
 
-class PricingCategoryEnum(Enum):
+class PricingCategoryEnum(str, Enum):
     WRITING = "writing"
     TECHNICAL = "technical"
     PROOFREADING = "proofreading"

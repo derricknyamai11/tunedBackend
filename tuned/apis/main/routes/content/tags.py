@@ -2,7 +2,7 @@ from flask.views import MethodView
 from tuned.utils.dependencies import get_services
 from tuned.utils.responses import success_response, error_response
 from tuned.core.logging import get_logger
-from tuned.redis_client import redis_client
+from tuned.utils.cache import cache_get, cache_set, cache_delete, cache_exists
 from dataclasses import asdict
 import json
 import logging
@@ -16,7 +16,7 @@ CACHE_KEY_TAGS = 'tags:list'
 class GetTagsList(MethodView):
     def get(self) -> tuple[Any, int]:
         try:
-            raw = redis_client.get(CACHE_KEY_TAGS)
+            raw = cache_get(CACHE_KEY_TAGS)
             if raw is not None and isinstance(raw, (str, bytes, bytearray)):
                 return success_response(
                     json.loads(raw),
@@ -26,7 +26,7 @@ class GetTagsList(MethodView):
             tag_dtos = get_services().tag.list_tags(limit=20)
             tag_data = [asdict(tag) for tag in tag_dtos]
             
-            redis_client.setex(
+            cache_set(
                 CACHE_KEY_TAGS, CACHE_TTL,
                 json.dumps(tag_data)
             )

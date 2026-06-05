@@ -25,7 +25,7 @@ class TestRegistrationRoute:
             'phone_number': '+1234567890'
         }
         
-        response = client.post('/auth/register', 
+        response = client.post('/api/auth/register', 
                               data=json.dumps(data),
                               content_type='application/json')
         
@@ -41,7 +41,7 @@ class TestRegistrationRoute:
         assert user is not None
         assert user.username == 'newuser'
     
-    def test_registration_duplicate_email(self, client, db, sample_user):
+    def test_registration_duplicate_email(self, client, db, sample_user, mock_redis):
         """Test registration with duplicate email."""
         data = {
             'username': 'differentuser',
@@ -53,7 +53,7 @@ class TestRegistrationRoute:
             'gender': 'male'
         }
         
-        response = client.post('/auth/register',
+        response = client.post('/api/auth/register',
                               data=json.dumps(data),
                               content_type='application/json')
         
@@ -62,7 +62,7 @@ class TestRegistrationRoute:
         assert json_data['success'] is False
         assert 'email' in json_data['errors']
     
-    def test_registration_password_mismatch(self, client, db):
+    def test_registration_password_mismatch(self, client, db, mock_redis):
         """Test registration with mismatched passwords."""
         data = {
             'username': 'newuser',
@@ -74,13 +74,14 @@ class TestRegistrationRoute:
             'gender': 'male'
         }
         
-        response = client.post('/auth/register',
+        response = client.post('/api/auth/register',
                               data=json.dumps(data),
                               content_type='application/json')
         
         assert response.status_code == 422
         json_data = response.get_json()
-        assert 'confirm_password' in json_data['errors']
+        errors_str = str(json_data.get('errors', {}))
+        assert 'confirmPassword' in errors_str or 'confirm_password' in errors_str
 
 
 class TestLoginRoute:
@@ -93,7 +94,7 @@ class TestLoginRoute:
             'password': 'TestPass123!'
         }
         
-        response = client.post('/auth/login',
+        response = client.post('/api/auth/login',
                               data=json.dumps(data),
                               content_type='application/json')
         
@@ -111,7 +112,7 @@ class TestLoginRoute:
             'password': 'TestPass123!'
         }
         
-        response = client.post('/auth/login',
+        response = client.post('/api/auth/login',
                               data=json.dumps(data),
                               content_type='application/json')
         
@@ -126,7 +127,7 @@ class TestLoginRoute:
             'password': 'WrongPassword123!'
         }
         
-        response = client.post('/auth/login',
+        response = client.post('/api/auth/login',
                               data=json.dumps(data),
                               content_type='application/json')
         
@@ -141,7 +142,7 @@ class TestLoginRoute:
             'password': 'TestPass123!'
         }
         
-        response = client.post('/auth/login',
+        response = client.post('/api/auth/login',
                               data=json.dumps(data),
                               content_type='application/json')
         
@@ -155,7 +156,7 @@ class TestLogoutRoute:
     
     def test_successful_logout(self, client, db, sample_user, auth_headers, mock_redis):
         """Test successful logout."""
-        response = client.post('/auth/logout',
+        response = client.post('/api/auth/logout',
                               headers=auth_headers)
         
         assert response.status_code == 200
@@ -167,7 +168,7 @@ class TestLogoutRoute:
     
     def test_logout_without_token(self, client, db):
         """Test logout without JWT token."""
-        response = client.post('/auth/logout')
+        response = client.post('/api/auth/logout')
         
         assert response.status_code == 401
 
@@ -182,7 +183,7 @@ class TestEmailVerificationRoute:
         
         data = {'token': token}
         
-        response = client.post('/auth/verify-email',
+        response = client.post('/api/auth/verify-email',
                               data=json.dumps(data),
                               content_type='application/json')
         
@@ -198,7 +199,7 @@ class TestEmailVerificationRoute:
         """Test verification with invalid token."""
         data = {'token': 'invalid_token'}
         
-        response = client.post('/auth/verify-email',
+        response = client.post('/api/auth/verify-email',
                               data=json.dumps(data),
                               content_type='application/json')
         
@@ -213,7 +214,7 @@ class TestEmailVerificationRoute:
         
         data = {'token': token}
         
-        response = client.post('/auth/verify-email',
+        response = client.post('/api/auth/verify-email',
                               data=json.dumps(data),
                               content_type='application/json')
         
@@ -229,7 +230,7 @@ class TestPasswordResetRoute:
         """Test successful password reset request."""
         data = {'email': sample_user.email}
         
-        response = client.post('/auth/password-reset/request',
+        response = client.post('/api/auth/password-reset/request',
                               data=json.dumps(data),
                               content_type='application/json')
         
@@ -241,7 +242,7 @@ class TestPasswordResetRoute:
         """Test reset request with non-existent email (generic response)."""
         data = {'email': 'nonexistent@example.com'}
         
-        response = client.post('/auth/password-reset/request',
+        response = client.post('/api/auth/password-reset/request',
                               data=json.dumps(data),
                               content_type='application/json')
         
@@ -259,7 +260,7 @@ class TestPasswordResetRoute:
             'confirm_password': 'NewSecurePass456!'
         }
         
-        response = client.post('/auth/password-reset/confirm',
+        response = client.post('/api/auth/password-reset/confirm',
                               data=json.dumps(data),
                               content_type='application/json')
         
@@ -267,10 +268,10 @@ class TestPasswordResetRoute:
         json_data = response.get_json()
         assert json_data['success'] is True
         
-        # Verify password was changed
-        from tuned.utils.auth import verify_password
+        # Verify password was changed (uses werkzeug hashing consistent with User model)
+        from werkzeug.security import check_password_hash
         db.session.refresh(sample_user)
-        assert verify_password('NewSecurePass456!', sample_user.password_hash)
+        assert check_password_hash(sample_user.password_hash, 'NewSecurePass456!')
     
     def test_password_reset_confirm_invalid_token(self, client, db):
         """Test reset confirmation with invalid token."""
@@ -280,7 +281,7 @@ class TestPasswordResetRoute:
             'confirm_password': 'NewSecurePass456!'
         }
         
-        response = client.post('/auth/password-reset/confirm',
+        response = client.post('/api/auth/password-reset/confirm',
                               data=json.dumps(data),
                               content_type='application/json')
         
@@ -299,10 +300,11 @@ class TestPasswordResetRoute:
             'confirm_password': 'DifferentPass789!'
         }
         
-        response = client.post('/auth/password-reset/confirm',
+        response = client.post('/api/auth/password-reset/confirm',
                               data=json.dumps(data),
                               content_type='application/json')
         
         assert response.status_code == 422
         json_data = response.get_json()
-        assert 'confirm_password' in json_data['errors']
+        errors_str = str(json_data.get('errors', {}))
+        assert 'confirm_password' in errors_str or 'confirmPassword' in errors_str

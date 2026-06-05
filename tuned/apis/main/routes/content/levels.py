@@ -2,23 +2,22 @@ from tuned.core.logging import get_logger
 from flask.views import MethodView
 from tuned.utils.dependencies import get_services
 from tuned.utils.responses import success_response, error_response
-from tuned.redis_client import redis_client
 
 from dataclasses import asdict
 import json
 import logging
 from typing import Any
+from tuned.utils.cache import cache_get, cache_set, cache_delete, cache_exists
 
 logger: logging.Logger = get_logger(__name__)
 
 CACHE_TTL = 300
 CACHE_KEY_ACADEMIC_LEVELS = 'academic_levels:list'
 
-
 class GetAcademicLevels(MethodView):
     def get(self) -> tuple[Any, int]:
         try:
-            raw = redis_client.get(CACHE_KEY_ACADEMIC_LEVELS)
+            raw = cache_get(CACHE_KEY_ACADEMIC_LEVELS)
             if raw is not None and isinstance(raw, (str, bytes, bytearray)):
                 return success_response(
                     json.loads(raw),
@@ -28,7 +27,7 @@ class GetAcademicLevels(MethodView):
             academic_levels = get_services().academic_level.list_academic_levels()
             academic_levels_data = [asdict(academic_level) for academic_level in academic_levels]
             
-            redis_client.setex(
+            cache_set(
                 CACHE_KEY_ACADEMIC_LEVELS, CACHE_TTL,
                 json.dumps(academic_levels_data)
             )

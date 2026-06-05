@@ -38,4 +38,5 @@ app.db
 temp/
 audit_report.md
 implementation_plan.md
-.codex
+app.db-shm
+app.db-wal

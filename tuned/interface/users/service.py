@@ -62,11 +62,22 @@ class UserService:
     def create_user(self, data: CreateUserDTO, locale: BaseRequestDTO, referred_by_code: Optional[str] = None) -> Dict[str, Any]:
         try:
             created_user = self._core.register_user(
-                data, 
-                locale.ip_address or "unknown", 
+                data,
+                locale.ip_address or "unknown",
                 locale.user_agent or "unknown"
             )
-            
+
+            # In dev mode (REQUIRE_EMAIL_VERIFICATION=False), auto-verify the user
+            # so they can log in immediately without needing an email.
+            from flask import current_app
+            from tuned.extensions import db as _db
+            if not is_email_verified_required():
+                created_user.email_verified = True
+                created_user.is_active = True
+                _db.session.commit()
+                logger.info(f'[create_user] Auto-verified {created_user.email} (dev mode)')
+                return {'email': created_user.email, 'auto_verified': True}
+
             try:
                 _user, raw_token = self._repo.generate_verification_token(str(created_user.id))
                 event_bus.emit('user.registered', {
@@ -92,9 +103,14 @@ class UserService:
 
     def resend_verification_email(self, dto: EmailVerificationResendDTO) -> bool:
         cooldown_key = f'email_resend_cooldown:{dto.email}'
-        if redis_client.exists(cooldown_key):
-            ttl: int = int(cast(Any, redis_client.ttl(cooldown_key)))
-            raise ValueError(f'rate_limited:{ttl}')
+        try:
+            if redis_client.exists(cooldown_key):
+                ttl: int = int(cast(Any, redis_client.ttl(cooldown_key)))
+                raise ValueError(f'rate_limited:{ttl}')
+        except ValueError:
+            raise
+        except Exception:
+            pass  # Redis unavailable — skip rate limiting
 
         user = self._repo.get_user_for_resend(dto.email)
         if user is None or user.email_verified:
@@ -112,10 +128,16 @@ class UserService:
             return True
         except Exception as exc:
             logger.error(f'[resend] Token/email error for {dto.email}: {exc!r}')
-            redis_client.setex(cooldown_key, 60, '1')
+            try:
+                redis_client.setex(cooldown_key, 60, '1')
+            except Exception:
+                pass
             raise
 
-        redis_client.setex(cooldown_key, 60, '1')
+        try:
+            redis_client.setex(cooldown_key, 60, '1')
+        except Exception:
+            pass
         return True
 
     def confirm_email_verification(self, dto: EmailVerifyConfirmDTO) -> Tuple[bool, str]:
@@ -213,17 +235,59 @@ class UserService:
         self._repo.save()
         return True
 
+    # Magic bytes (file signatures) for allowed image types
+    _ALLOWED_IMAGE_SIGNATURES: Dict[bytes, str] = {
+        b'\xff\xd8\xff': '.jpg',
+        b'\x89PNG\r\n\x1a\n': '.png',
+        b'GIF87a': '.gif',
+        b'GIF89a': '.gif',
+        b'RIFF': '.webp',   # WebP starts with RIFF....WEBP
+        b'\x00\x00\x00\x0cjP  ': '.jp2',  # JPEG 2000
+    }
+    _ALLOWED_EXTENSIONS: frozenset = frozenset({'.jpg', '.jpeg', '.png', '.gif', '.webp'})
+    _MAX_AVATAR_SIZE: int = 5 * 1024 * 1024  # 5 MB
+
+    def _validate_image_magic_bytes(self, file: Any) -> str:
+        """Read the first 12 bytes and check against known image signatures.
+        Returns the validated extension or raises ValueError."""
+        header = file.read(12)
+        file.seek(0)  # Reset stream so the full file can be saved
+
+        for magic, ext in self._ALLOWED_IMAGE_SIGNATURES.items():
+            if header.startswith(magic):
+                # Special check for WebP: bytes 8-11 must be 'WEBP'
+                if magic == b'RIFF' and header[8:12] != b'WEBP':
+                    continue
+                return ext
+
+        raise ValueError("File is not a recognised image format (JPEG, PNG, GIF, WebP).")
+
     def upload_avatar(self, user_id: str, file: Any, locale: BaseRequestDTO) -> Dict[str, Any]:
         user = self._repo.get_user_by_id(user_id)
-        
+
+        # ── Security: validate file size ─────────────────────────────────
+        file.seek(0, 2)
+        size = file.tell()
+        file.seek(0)
+        if size > self._MAX_AVATAR_SIZE:
+            raise ValueError(f"Avatar must be under {self._MAX_AVATAR_SIZE // (1024*1024)} MB.")
+
+        # ── Security: validate magic bytes (not just Content-Type) ───────
+        validated_ext = self._validate_image_magic_bytes(file)
+
+        # ── Security: also validate the declared extension ────────────────
+        original_filename = getattr(file, "filename", "avatar.png") or "avatar.png"
+        filename = secure_filename(original_filename)
+        declared_ext = os.path.splitext(filename)[1].lower()
+        if declared_ext not in self._ALLOWED_EXTENSIONS:
+            declared_ext = validated_ext  # fall back to magic-byte-determined extension
+
+        unique_filename = f"{uuid.uuid4().hex}{declared_ext}"
+
         static_folder = current_app.static_folder or "static"
         upload_folder = os.path.join(static_folder, 'client/assets/profile_pics')
         os.makedirs(upload_folder, exist_ok=True)
-        
-        original_filename = getattr(file, "filename", "avatar.png") or "avatar.png"
-        filename = secure_filename(original_filename)
-        ext = os.path.splitext(filename)[1]
-        unique_filename = f"{uuid.uuid4().hex}{ext}"
+
         file_path = os.path.join(upload_folder, unique_filename)
         file.save(file_path)
         

@@ -7,6 +7,14 @@ from tuned.core.logging import get_logger
 logger: logging.Logger = get_logger(__name__)
 
 
+def _safe_delay(task: object, *args: object, **kwargs: object) -> None:
+    """Call a Celery task's .delay() without blocking if the broker is down."""
+    try:
+        getattr(task, 'delay')(*args, **kwargs)
+    except Exception:
+        pass
+
+
 class OrderEventHandlers:
     def __init__(self, event_bus: EventBus) -> None:
         self._bus = event_bus
@@ -43,7 +51,8 @@ class OrderEventHandlers:
         try:
             from tuned.tasks.notifications import create_in_app_notification
             from tuned.models.enums import NotificationType
-            create_in_app_notification.delay(
+            
+            _safe_delay(create_in_app_notification,
                 user_id=str(client_id),
                 title="Order Updated",
                 message=f"Order {order_number} status changed to {new_status}.",
@@ -77,7 +86,8 @@ class OrderEventHandlers:
         try:
             from tuned.tasks.notifications import create_in_app_notification
             from tuned.models.enums import NotificationType
-            create_in_app_notification.delay(
+            
+            _safe_delay(create_in_app_notification,
                 user_id=str(client_id),
                 title="New Order Placed",
                 message=f"Order {order_number} has been created successfully.",

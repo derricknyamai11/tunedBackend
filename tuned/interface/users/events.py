@@ -19,6 +19,14 @@ class UserEventHandlers:
         self._bus.on("user.password_changed",          self._on_password_changed)
         logger.info("[UserEventHandlers] registered")
 
+    @staticmethod
+    def _safe_async(task: Any, *args: Any, **kwargs: Any) -> None:
+        """Call a Celery task without blocking if the broker is unavailable."""
+        try:
+            task.apply_async(*args, **kwargs)
+        except Exception:
+            pass  # Broker (Redis) not running — skip background task
+
     def _on_registered(self, payload: EventPayload) -> None:
         from tuned.services.email_service import send_verification_email
         from tuned.tasks.email import send_welcome_task
@@ -31,9 +39,7 @@ class UserEventHandlers:
         try:
             user = GetUserByID(cast(Any, db.session)).execute(str(user_id))
             send_verification_email(user, str(raw_token or ""))
-            send_welcome_task.apply_async(
-                args=[user_id], countdown=1800, queue="email"
-            )
+            self._safe_async(send_welcome_task, args=[user_id], countdown=1800, queue="email")
         except Exception as exc:
             logger.error("[UserEventHandlers._on_registered] Error: %r", exc)
 
@@ -58,11 +64,14 @@ class UserEventHandlers:
         from tuned.models.enums import NotificationType
 
         user_id = payload.get("user_id")
-        create_in_app_notification.delay(
-            user_id=str(user_id),
-            title="Email Verified",
-            message="Your email has been verified. Welcome to TunedEssays!",
-            notification_type=NotificationType.SUCCESS,
+        self._safe_async(
+            create_in_app_notification,
+            kwargs=dict(
+                user_id=str(user_id),
+                title="Email Verified",
+                message="Your email has been verified. Welcome to TunedEssays!",
+                notification_type=NotificationType.SUCCESS,
+            ),
         )
 
     def _on_password_changed(self, payload: EventPayload) -> None:
@@ -70,12 +79,15 @@ class UserEventHandlers:
         from tuned.models.enums import NotificationType
 
         user_id = payload.get("user_id")
-        create_in_app_notification.delay(
-            user_id=str(user_id),
-            title="Password Changed",
-            message=(
-                "Your password has been successfully updated. "
-                "If this wasn't you, please contact support immediately."
+        self._safe_async(
+            create_in_app_notification,
+            kwargs=dict(
+                user_id=str(user_id),
+                title="Password Changed",
+                message=(
+                    "Your password has been successfully updated. "
+                    "If this wasn't you, please contact support immediately."
+                ),
+                notification_type=NotificationType.WARNING,
             ),
-            notification_type=NotificationType.WARNING,
         )

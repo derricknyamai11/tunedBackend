@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from tuned.dtos.base import BaseDTO, PaginationDTO
 from tuned.dtos.user import UserResponseDTO
 from dataclasses import dataclass

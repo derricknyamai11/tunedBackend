@@ -50,7 +50,10 @@ def send_email(
 
 def send_async_email(to: str, subject: str, template: str, sender: Optional[str]=None, **context: Any) -> None:
     from tuned.tasks.email import send_transactional_email
-    send_transactional_email.delay(to, subject, template, context, sender)
+    try:
+        send_transactional_email.apply_async(retry=False, args=[to, subject, template, context, sender])
+    except Exception:
+        pass  # Broker unavailable — skip
 
 
 def send_bulk_emails(

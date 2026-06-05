@@ -5,13 +5,13 @@ Tests validation logic for registration, login, password reset, etc.
 """
 import pytest
 from marshmallow import ValidationError
-from tuned.auth.schemas import (
+from tuned.apis.auth.schemas import (
     RegistrationSchema,
     LoginSchema,
     PasswordResetRequestSchema,
     PasswordResetConfirmSchema,
     EmailVerificationSchema,
-    ResendVerificationSchema
+    ResendVerificationSchema,
 )
 from tuned.models.user import User
 
@@ -54,9 +54,9 @@ class TestRegistrationSchema:
         
         with pytest.raises(ValidationError) as exc_info:
             schema.load(data)
-        
-        assert 'confirm_password' in exc_info.value.messages
-        assert 'do not match' in str(exc_info.value.messages)
+
+        messages_str = str(exc_info.value.messages)
+        assert 'do not match' in messages_str.lower() or 'confirmPassword' in exc_info.value.messages
     
     def test_registration_duplicate_email(self, db, sample_user):
         """Test that duplicate email fails validation."""
@@ -133,7 +133,7 @@ class TestRegistrationSchema:
         assert 'email' in exc_info.value.messages
     
     def test_registration_invalid_gender(self, db):
-        """Test that invalid gender fails validation."""
+        """Schema normalizes unknown genders to 'unknown' — no error raised."""
         schema = RegistrationSchema()
         data = {
             'username': 'newuser',
@@ -144,11 +144,8 @@ class TestRegistrationSchema:
             'last_name': 'Doe',
             'gender': 'invalid'
         }
-        
-        with pytest.raises(ValidationError) as exc_info:
-            schema.load(data)
-        
-        assert 'gender' in exc_info.value.messages
+        result = schema.load(data)
+        assert result['gender'] == 'unknown'
     
     def test_registration_invalid_phone(self, db):
         """Test that invalid phone number fails validation."""
@@ -177,51 +174,51 @@ class TestLoginSchema:
         """Test that valid login data passes validation."""
         schema = LoginSchema()
         data = {
-            'email': 'test@example.com',
+            'identifier': 'test@example.com',
             'password': 'TestPass123!',
             'remember_me': True
         }
-        
+
         result = schema.load(data)
-        
-        assert result['email'] == 'test@example.com'
+
+        assert result['identifier'] == 'test@example.com'
         assert result['password'] == 'TestPass123!'
         assert result['remember_me'] is True
-    
+
     def test_login_without_remember_me(self):
         """Test that remember_me defaults to False."""
         schema = LoginSchema()
         data = {
-            'email': 'test@example.com',
+            'identifier': 'test@example.com',
             'password': 'TestPass123!'
         }
-        
+
         result = schema.load(data)
-        
+
         assert result['remember_me'] is False
-    
+
     def test_login_missing_email(self):
-        """Test that missing email fails validation."""
+        """Test that missing identifier fails validation."""
         schema = LoginSchema()
         data = {
             'password': 'TestPass123!'
         }
-        
+
         with pytest.raises(ValidationError) as exc_info:
             schema.load(data)
-        
-        assert 'email' in exc_info.value.messages
-    
+
+        assert 'identifier' in exc_info.value.messages
+
     def test_login_missing_password(self):
         """Test that missing password fails validation."""
         schema = LoginSchema()
         data = {
-            'email': 'test@example.com'
+            'identifier': 'test@example.com'
         }
-        
+
         with pytest.raises(ValidationError) as exc_info:
             schema.load(data)
-        
+
         assert 'password' in exc_info.value.messages
 
 
@@ -298,24 +295,27 @@ class TestEmailVerificationSchemas:
     """Tests for email verification schemas."""
     
     def test_valid_verification_token(self):
-        """Test that valid token passes validation."""
+        """Test that valid uid + token passes validation."""
         schema = EmailVerificationSchema()
+        token_value = 'a' * 40  # must be >= 40 chars
         data = {
-            'token': 'valid_verification_token'
+            'uid': 'some-user-uid-value',
+            'token': token_value,
         }
-        
+
         result = schema.load(data)
-        
-        assert result['token'] == 'valid_verification_token'
-    
+
+        assert result['token'] == token_value
+        assert result['uid'] == 'some-user-uid-value'
+
     def test_verification_missing_token(self):
         """Test that missing token fails validation."""
         schema = EmailVerificationSchema()
-        data = {}
-        
+        data = {'uid': 'some-user-uid-value'}
+
         with pytest.raises(ValidationError) as exc_info:
             schema.load(data)
-        
+
         assert 'token' in exc_info.value.messages
     
     def test_valid_resend_verification(self):

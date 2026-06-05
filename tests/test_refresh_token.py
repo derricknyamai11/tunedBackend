@@ -21,7 +21,7 @@ class TestRefreshTokenRoute:
             'Content-Type': 'application/json'
         }
         
-        response = client.post('/auth/refresh', headers=headers)
+        response = client.post('/api/auth/refresh', headers=headers)
         
         assert response.status_code == 200
         json_data = response.get_json()
@@ -40,14 +40,14 @@ class TestRefreshTokenRoute:
             'Content-Type': 'application/json'
         }
         
-        response = client.post('/auth/refresh', headers=headers)
+        response = client.post('/api/auth/refresh', headers=headers)
         
         # Should fail because it's an access token not refresh token
         assert response.status_code == 422  # Flask-JWT-Extended default
     
     def test_refresh_without_token(self, client, db):
         """Test refresh request without token."""
-        response = client.post('/auth/refresh')
+        response = client.post('/api/auth/refresh')
         
         assert response.status_code == 401
     
@@ -58,7 +58,7 @@ class TestRefreshTokenRoute:
             'Content-Type': 'application/json'
         }
         
-        response = client.post('/auth/refresh', headers=headers)
+        response = client.post('/api/auth/refresh', headers=headers)
         
         assert response.status_code == 422
     
@@ -72,7 +72,7 @@ class TestRefreshTokenRoute:
             'Content-Type': 'application/json'
         }
         
-        response = client.post('/auth/refresh', headers=headers)
+        response = client.post('/api/auth/refresh', headers=headers)
         
         assert response.status_code == 403
         json_data = response.get_json()
@@ -92,7 +92,7 @@ class TestRefreshTokenRoute:
             'Content-Type': 'application/json'
         }
         
-        response = client.post('/auth/refresh', headers=headers)
+        response = client.post('/api/auth/refresh', headers=headers)
         
         assert response.status_code == 403
         json_data = response.get_json()
@@ -104,7 +104,7 @@ class TestTokenVerificationRoute:
     
     def test_verify_valid_access_token(self, client, db, sample_user, auth_headers):
         """Test verification of valid access token."""
-        response = client.get('/auth/verify-token', headers=auth_headers)
+        response = client.get('/api/auth/verify-token', headers=auth_headers)
         
         assert response.status_code == 200
         json_data = response.get_json()
@@ -115,7 +115,7 @@ class TestTokenVerificationRoute:
     
     def test_verify_without_token(self, client, db):
         """Test verification without token."""
-        response = client.get('/auth/verify-token')
+        response = client.get('/api/auth/verify-token')
         
         assert response.status_code == 401
     
@@ -123,7 +123,7 @@ class TestTokenVerificationRoute:
         """Test verification with invalid token."""
         headers = {'Authorization': 'Bearer invalid_token'}
         
-        response = client.get('/auth/verify-token', headers=headers)
+        response = client.get('/api/auth/verify-token', headers=headers)
         
         assert response.status_code == 422
     
@@ -132,6 +132,6 @@ class TestTokenVerificationRoute:
         sample_user.is_active = False
         db.session.commit()
         
-        response = client.get('/auth/verify-token', headers=auth_headers)
+        response = client.get('/api/auth/verify-token', headers=auth_headers)
         
         assert response.status_code == 403

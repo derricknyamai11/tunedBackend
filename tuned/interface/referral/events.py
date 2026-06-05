@@ -5,6 +5,14 @@ from tuned.core.events import EventBus
 
 logger = logging.getLogger(__name__)
 
+
+def _safe_delay(task: object, *args: object, **kwargs: object) -> None:
+    try:
+        getattr(task, 'delay')(*args, **kwargs)
+    except Exception:
+        pass
+
+
 class ReferralEventHandlers:
     def __init__(self, bus: EventBus) -> None:
         self.bus = bus
@@ -34,7 +42,8 @@ class ReferralEventHandlers:
         if payment_id and user_id:
             logger.info(f"[ReferralEventHandlers] PaymentCompleted event received for user {user_id}. Enqueueing referral check task.")
             from tuned.tasks.referral_tasks import process_referral_reward_task
-            process_referral_reward_task.delay(str(payment_id), str(user_id))
+            
+            _safe_delay(process_referral_reward_task,str(payment_id), str(user_id))
 
     def handle_commission_earned(self, payload: Dict[str, Any]) -> None:
         referrer_id = payload.get("referrer_id")
@@ -47,7 +56,8 @@ class ReferralEventHandlers:
             from tuned.models.enums import NotificationType
             room = f"user_{referrer_id}"
             socketio.emit('dashboard:points_updated', payload, room=room)
-            create_in_app_notification.delay(
+            
+            _safe_delay(create_in_app_notification,
                 user_id=str(referrer_id),
                 title="Referral Points Earned!",
                 message=f"Congratulations! You just earned {payload.get('points_earned')} reward points from a successful referral.",

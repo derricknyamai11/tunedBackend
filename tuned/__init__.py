@@ -27,11 +27,33 @@ def create_app(config_name: Optional[str] = None) -> Flask:
     
     db.init_app(app)
     migrate.init_app(app, db)
+
+    # Enable WAL journal mode for SQLite (allows concurrent reads/writes)
+    db_uri = app.config.get('SQLALCHEMY_DATABASE_URI', '')
+    if 'sqlite' in db_uri:
+        from sqlalchemy import event as sa_event
+        from sqlalchemy.engine import Engine
+        import sqlite3
+
+        @sa_event.listens_for(Engine, "connect")
+        def set_sqlite_wal(dbapi_conn: Any, _: Any) -> None:
+            if isinstance(dbapi_conn, sqlite3.Connection):
+                dbapi_conn.execute("PRAGMA journal_mode=WAL")
+                dbapi_conn.execute("PRAGMA busy_timeout=5000")
     login_manager.init_app(app)
     jwt.init_app(app)
     mail.init_app(app)
     
-    cors_origins = app.config.get('CORS_ORIGINS', '*')
+    cors_origins = app.config.get('CORS_ORIGINS')
+    if not cors_origins or cors_origins == '*':
+        if app.config.get('FLASK_ENV') == 'production':
+            raise RuntimeError(
+                "CORS_ORIGINS must be explicitly set in production. "
+                "Set it to your frontend domain, e.g. 'https://tunedessays.com'"
+            )
+        # Development: allow localhost only
+        cors_origins = ['http://localhost:3000', 'http://127.0.0.1:3000']
+        logger.warning("CORS_ORIGINS not set — defaulting to localhost:3000 only")
     cors.init_app(app, origins=cors_origins, supports_credentials=True)
     
     socketio_kwargs = {
@@ -72,23 +94,29 @@ def create_app(config_name: Optional[str] = None) -> Flask:
     
     @jwt.token_in_blocklist_loader
     def check_if_token_revoked(jwt_header: dict[str, Any], jwt_payload: dict[str, Any]) -> bool:
-        from tuned.redis_client import is_token_blacklisted
-        jti = jwt_payload['jti']
-        return is_token_blacklisted(jti)
+        try:
+            from tuned.redis_client import is_token_blacklisted
+            jti = jwt_payload['jti']
+            return is_token_blacklisted(jti)
+        except Exception:
+            return False  # Redis unavailable — assume token is valid
     
     from tuned.apis import(
-        main_bp, auth_bp, notification_bp, client_bp
-    ) 
+        main_bp, auth_bp, notification_bp, client_bp, admin_bp, orders_bp, writer_bp
+    )
     from tuned.manage import manage_bp
-    
+
     app.register_blueprint(auth_bp, url_prefix='/api')
     app.register_blueprint(notification_bp, url_prefix='/api/notifications')
     app.register_blueprint(client_bp, url_prefix='/api/client')
+    app.register_blueprint(orders_bp, url_prefix='/api/client')
+    app.register_blueprint(admin_bp, url_prefix='/api')
+    app.register_blueprint(writer_bp, url_prefix='/api/writer')
     app.register_blueprint(manage_bp)
-    
+
     # from tuned.apis.client.routes.settings.preferences import preferences_bp
     # app.register_blueprint(preferences_bp, url_prefix='/client/settings/preferences')
-    
+
     app.register_blueprint(main_bp, url_prefix="/api")  # No prefix - root routes
 
     
@@ -103,12 +131,45 @@ def create_app(config_name: Optional[str] = None) -> Flask:
         )
     
     register_error_handlers(app)
-    
+    register_security_headers(app)
     register_shell_context(app)
 
-
-
     return app
+
+
+def register_security_headers(app: Flask) -> None:
+    """Attach OWASP-recommended security headers to every response."""
+    from flask import Response
+
+    @app.after_request
+    def apply_security_headers(response: Response) -> Response:
+        # Prevent clickjacking
+        response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+        # Prevent MIME-type sniffing
+        response.headers['X-Content-Type-Options'] = 'nosniff'
+        # Legacy XSS filter (still useful for older browsers)
+        response.headers['X-XSS-Protection'] = '1; mode=block'
+        # Referrer policy — only send origin, not full URL
+        response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+        # Restrict access to browser features
+        response.headers['Permissions-Policy'] = (
+            'geolocation=(), microphone=(), camera=(), payment=(), usb=()'
+        )
+        # Content Security Policy — tight for an API backend
+        response.headers['Content-Security-Policy'] = (
+            "default-src 'none'; "
+            "frame-ancestors 'none'; "
+            "form-action 'none';"
+        )
+        # HSTS — production only (enforced by env)
+        if app.config.get('FLASK_ENV') == 'production':
+            response.headers['Strict-Transport-Security'] = (
+                'max-age=31536000; includeSubDomains; preload'
+            )
+        # Never cache API responses by default
+        if response.content_type and 'application/json' in response.content_type:
+            response.headers.setdefault('Cache-Control', 'no-store')
+        return response
 
 
 def register_error_handlers(app: Flask) -> None:

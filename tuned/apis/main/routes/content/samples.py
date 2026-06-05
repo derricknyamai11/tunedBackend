@@ -5,7 +5,7 @@ from flask import request
 from tuned.utils.dependencies import get_services
 from tuned.utils.responses import success_response, error_response, paginated_response, validation_error_response
 from tuned.apis.main.schemas import SampleFilterSchema
-from tuned.redis_client import redis_client
+from tuned.utils.cache import cache_get, cache_set, cache_delete, cache_exists
 from marshmallow import ValidationError
 from dataclasses import asdict
 import json
@@ -16,7 +16,6 @@ logger: logging.Logger = get_logger(__name__)
 
 CACHE_TTL = 300
 CACHE_KEY_SAMPLES = 'samples:list'
-
 
 class SampleListView(MethodView):
     def __init__(self) -> None:
@@ -34,7 +33,7 @@ class SampleListView(MethodView):
 
         try:
             cache_key = f"{CACHE_KEY_SAMPLES}:{json.dumps(params)}"
-            raw = redis_client.get(cache_key)
+            raw = cache_get(cache_key)
             if raw is not None and isinstance(raw, (str, bytes, bytearray)):
                 data = json.loads(raw)
                 logger.info(f'Samples fetched from cache: page {data.get("page")}, total {data.get("total")}')
@@ -50,11 +49,9 @@ class SampleListView(MethodView):
             samples_dto = get_services().sample.list_samples(samples_req)
             samples_data = asdict(samples_dto)
 
-            redis_client.set(
-                cache_key,
-                json.dumps(samples_data),
-                ex=CACHE_TTL
-            )
+            cache_set(
+                cache_key, CACHE_TTL
+            , json.dumps(samples_data))
 
             return paginated_response(
                 items=samples_data.get("samples", []),
@@ -70,7 +67,7 @@ class SampleListView(MethodView):
 class SampleDetailView(MethodView):
     def get(self, slug: str) -> tuple[Any, int]:
         try:
-            raw = redis_client.get(f'sample:{slug}')
+            raw = cache_get(f'sample:{slug}')
             if raw is not None and isinstance(raw, (str, bytes, bytearray)):
                 data = json.loads(raw)
                 logger.info(f'Sample fetched from cache: {slug}')
@@ -79,11 +76,9 @@ class SampleDetailView(MethodView):
             sample_dto = get_services().sample.get_sample_by_slug(slug)
             sample_data = asdict(sample_dto)
 
-            redis_client.set(
-                f'sample:{slug}',
-                json.dumps(sample_data),
-                ex=CACHE_TTL
-            )
+            cache_set(
+                f'sample:{slug}', CACHE_TTL
+            , json.dumps(sample_data))
 
             return success_response(sample_data)
         except Exception as e:
@@ -103,7 +98,7 @@ class SampleServiceView(MethodView):
 class SampleRelatedView(MethodView):
     def get(self, slug: str) -> tuple[Any, int]:
         try:
-            raw = redis_client.get(f'sample:{slug}:related')
+            raw = cache_get(f'sample:{slug}:related')
             if raw is not None and isinstance(raw, (str, bytes, bytearray)):
                 data = json.loads(raw)
                 logger.info(f'Sample related fetched from cache: {slug}')
@@ -112,11 +107,9 @@ class SampleRelatedView(MethodView):
             related_samples = get_services().sample.get_related_samples(slug)
             related_samples_data = [asdict(s) for s in related_samples]
 
-            redis_client.set(
-                f'sample:{slug}:related',
-                json.dumps(related_samples_data),
-                ex=CACHE_TTL
-            )
+            cache_set(
+                f'sample:{slug}:related', CACHE_TTL
+            , json.dumps(related_samples_data))
 
             return success_response(related_samples_data)
         except Exception as e:

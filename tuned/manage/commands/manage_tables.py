@@ -35,17 +35,36 @@ def _all_table_names() -> list[str]:
     return sorted(inspector.get_table_names())
 
 
+_SAFE_TABLE_NAME_RE = __import__('re').compile(r'^[a-zA-Z_][a-zA-Z0-9_]*$')
+
+
+def _assert_safe_table_name(table: str) -> None:
+    """Raise if the table name contains characters that could cause SQL injection."""
+    if not _SAFE_TABLE_NAME_RE.match(table):
+        raise ValueError(f"Unsafe table name rejected: {table!r}")
+
+
 def _row_count(table: str) -> int:
+    _assert_safe_table_name(table)
     try:
-        result = db.session.execute(text(f"SELECT COUNT(*) FROM `{table}`"))
+        # Use SQLAlchemy Table reflection instead of raw f-string to avoid SQLi
+        from sqlalchemy import select, func, Table, MetaData
+        meta = MetaData()
+        t = Table(table, meta, autoload_with=db.engine)
+        result = db.session.execute(select(func.count()).select_from(t))
         return result.scalar() or 0
     except Exception:
         return -1
 
 
 def _delete_table(table: str) -> int:
+    _assert_safe_table_name(table)
     count_before = _row_count(table)
-    db.session.execute(text(f"DELETE FROM `{table}`"))
+    # Use reflected Table object — no user-controlled string in SQL
+    from sqlalchemy import delete as sa_delete, Table, MetaData
+    meta = MetaData()
+    t = Table(table, meta, autoload_with=db.engine)
+    db.session.execute(sa_delete(t))
     db.session.commit()
     return count_before if count_before >= 0 else -1
 

@@ -76,9 +76,6 @@ class GetFeaturedBlogPosts:
                 .order_by(BlogPost.published_at.desc())
             )
             posts = self.session.scalars(stmt).all()
-            if not posts:
-                raise NotFound("posts not found")
-
             return [BlogPostResponseDTO.from_model(s) for s in posts]
 
         except SQLAlchemyError as e:

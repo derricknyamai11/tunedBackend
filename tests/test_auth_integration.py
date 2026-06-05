@@ -24,7 +24,7 @@ class TestAuthenticationFlow:
             'gender': 'female'
         }
         
-        response = client.post('/auth/register',
+        response = client.post('/api/auth/register',
                               data=json.dumps(registration_data),
                               content_type='application/json')
         
@@ -38,7 +38,7 @@ class TestAuthenticationFlow:
             'password': 'IntegrationPass123!'
         }
         
-        response = client.post('/auth/login',
+        response = client.post('/api/auth/login',
                               data=json.dumps(login_data),
                               content_type='application/json')
         
@@ -53,14 +53,14 @@ class TestAuthenticationFlow:
         with app.app_context():
             token = generate_verification_token(user.id, user.email)
         
-        response = client.post('/auth/verify-email',
+        response = client.post('/api/auth/verify-email',
                               data=json.dumps({'token': token}),
                               content_type='application/json')
         
         assert response.status_code == 200
         
         # Step 4: Login after verification (should succeed)
-        response = client.post('/auth/login',
+        response = client.post('/api/auth/login',
                               data=json.dumps(login_data),
                               content_type='application/json')
         
@@ -72,7 +72,7 @@ class TestAuthenticationFlow:
     def test_password_reset_flow(self, client, db, sample_user, app, mock_mail, mock_redis):
         """Test complete password reset flow."""
         # Step 1: Request password reset
-        response = client.post('/auth/password-reset/request',
+        response = client.post('/api/auth/password-reset/request',
                               data=json.dumps({'email': sample_user.email}),
                               content_type='application/json')
         
@@ -85,7 +85,7 @@ class TestAuthenticationFlow:
         
         # Step 3: Confirm password reset
         new_password = 'NewSecurePassword123!'
-        response = client.post('/auth/password-reset/confirm',
+        response = client.post('/api/auth/password-reset/confirm',
                               data=json.dumps({
                                   'token': reset_token,
                                   'new_password': new_password,
@@ -96,7 +96,7 @@ class TestAuthenticationFlow:
         assert response.status_code == 200
         
         # Step 4: Login with new password
-        response = client.post('/auth/login',
+        response = client.post('/api/auth/login',
                               data=json.dumps({
                                   'email': sample_user.email,
                                   'password': new_password
@@ -106,7 +106,7 @@ class TestAuthenticationFlow:
         assert response.status_code == 200
         
         # Step 5: Verify old password doesn't work
-        response = client.post('/auth/login',
+        response = client.post('/api/auth/login',
                               data=json.dumps({
                                   'email': sample_user.email,
                                   'password': 'TestPass123!'
@@ -118,7 +118,7 @@ class TestAuthenticationFlow:
     def test_login_logout_flow(self, client, db, sample_user, mock_redis):
         """Test login → logout → attempt access flow."""
         # Step 1: Login
-        response = client.post('/auth/login',
+        response = client.post('/api/auth/login',
                               data=json.dumps({
                                   'email': sample_user.email,
                                   'password': 'TestPass123!'
@@ -130,7 +130,7 @@ class TestAuthenticationFlow:
         
         # Step 2: Logout
         headers = {'Authorization': f'Bearer {access_token}'}
-        response = client.post('/auth/logout', headers=headers)
+        response = client.post('/api/auth/logout', headers=headers)
         
         assert response.status_code == 200
         
@@ -147,13 +147,13 @@ class TestAuthenticationFlow:
         
         # Make 5 failed login attempts
         for _ in range(5):
-            response = client.post('/auth/login',
+            response = client.post('/api/auth/login',
                                   data=json.dumps(login_data),
                                   content_type='application/json')
             assert response.status_code == 401
         
         # 6th attempt should trigger lockout
-        response = client.post('/auth/login',
+        response = client.post('/api/auth/login',
                               data=json.dumps(login_data),
                               content_type='application/json')
         
@@ -164,7 +164,7 @@ class TestAuthenticationFlow:
     
     def test_resend_verification_email(self, client, db, unverified_user, mock_mail, mock_redis):
         """Test resending verification email."""
-        response = client.post('/auth/resend-verification',
+        response = client.post('/api/auth/resend-verification',
                               data=json.dumps({'email': unverified_user.email}),
                               content_type='application/json')
         
@@ -177,22 +177,22 @@ class TestAuthenticationFlow:
 class TestErrorHandling:
     """Test error handling and edge cases."""
     
-    def test_invalid_json_request(self, client):
+    def test_invalid_json_request(self, client, mock_redis):
         """Test that invalid JSON is handled properly."""
-        response = client.post('/auth/register',
+        response = client.post('/api/auth/register',
                               data='invalid json{',
                               content_type='application/json')
         
         assert response.status_code == 400
     
-    def test_missing_required_fields(self, client, db):
+    def test_missing_required_fields(self, client, db, mock_redis):
         """Test that missing required fields are caught."""
         incomplete_data = {
             'email': 'test@example.com'
             # Missing other required fields
         }
         
-        response = client.post('/auth/register',
+        response = client.post('/api/auth/register',
                               data=json.dumps(incomplete_data),
                               content_type='application/json')
         
@@ -200,9 +200,9 @@ class TestErrorHandling:
         json_data = response.get_json()
         assert 'errors' in json_data or 'message' in json_data
     
-    def test_empty_request_body(self, client):
+    def test_empty_request_body(self, client, mock_redis):
         """Test that empty request body is handled."""
-        response = client.post('/auth/register',
+        response = client.post('/api/auth/register',
                               data=json.dumps({}),
                               content_type='application/json')
         
@@ -224,17 +224,17 @@ class TestSecurityFeatures:
             'gender': 'male'
         }
         
-        response = client.post('/auth/register',
+        response = client.post('/api/auth/register',
                               data=json.dumps(registration_data),
                               content_type='application/json')
         
         json_data = response.get_json()
         assert 'password' not in str(json_data).lower() or 'password_hash' not in str(json_data).lower()
     
-    def test_generic_error_messages(self, client, db):
+    def test_generic_error_messages(self, client, db, mock_redis):
         """Test that error messages don't reveal user existence."""
         # Test with non-existent email
-        response = client.post('/auth/password-reset/request',
+        response = client.post('/api/auth/password-reset/request',
                               data=json.dumps({'email': 'nonexistent@example.com'}),
                               content_type='application/json')
         
